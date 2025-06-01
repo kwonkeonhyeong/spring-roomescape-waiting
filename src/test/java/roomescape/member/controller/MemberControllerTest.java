@@ -1,0 +1,59 @@
+package roomescape.member.controller;
+
+import io.restassured.RestAssured;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.annotation.DirtiesContext.ClassMode;
+import org.springframework.test.context.ActiveProfiles;
+import roomescape.auth.dto.request.MemberSignUpRequest;
+import roomescape.member.domain.Member;
+import roomescape.member.domain.MemberRole;
+import roomescape.member.dto.response.MemberNameSelectResponse;
+import roomescape.member.fixture.MemberFixture;
+import roomescape.member.repository.MemberRepository;
+
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+@ActiveProfiles("test")
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.DEFINED_PORT)
+@DirtiesContext(classMode = ClassMode.AFTER_EACH_TEST_METHOD)
+class MemberControllerTest {
+    @Autowired
+    private MemberRepository memberRepository;
+
+    @Test
+    void 멤버_목록_불러오기() {
+        List<Member> savedMembers = MemberFixture.createMembers(5, MemberRole.USER).stream()
+                .map(memberRepository::save).toList();
+
+        List<MemberNameSelectResponse> expected = savedMembers.stream()
+                .map(member -> new MemberNameSelectResponse(member.getId(), member.getName()))
+                .toList();
+
+        // when
+        List<MemberNameSelectResponse> responses = RestAssured.given().log().all()
+                .when().get("/members")
+                .then().log().all()
+                .statusCode(200)
+                .extract().body().jsonPath().getList(".", MemberNameSelectResponse.class);
+
+        assertThat(responses).containsExactlyInAnyOrderElementsOf(expected);
+    }
+
+    @Test
+    void 회원가입하기() {
+        MemberSignUpRequest request = new MemberSignUpRequest("test", "test@test.com", "testpassword");
+
+        RestAssured.given().log().all()
+                .contentType("application/json")
+                .body(request)
+                .when().post("/members")
+                .then().log().all()
+                .statusCode(HttpStatus.OK.value());
+    }
+}
